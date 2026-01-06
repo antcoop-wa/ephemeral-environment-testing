@@ -26,7 +26,7 @@ jobs:
           echo "Checking if service '$SERVICE_NAME' already exists..."
           LIST_RESPONSE=$(curl -s --request GET \
             --url "https://api.render.com/v1/services" \
-            --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}") \
+            --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             --header "Accept: application/json"
           
           echo "Services list response:"
