@@ -115,43 +115,14 @@ jobs:
           name: service-url
           path: service-url.txt
           
-      - name: Post URL to PR comment
+      - name: Post URL to job summary
         if: always()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            let serviceUrl = 'URL not available';
-            try {
-              if (fs.existsSync('service-url.txt')) {
-                serviceUrl = fs.readFileSync('service-url.txt', 'utf8').trim();
-              }
-            } catch (e) {
-              console.log('Could not read service-url.txt:', e.message);
-            }
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `🚀 Preview environment deployed!\n\n**Service URL:** ${serviceUrl}\n\nThis preview will be cleaned up when the PR is closed.`
-            });
-
-      - name: Create PR check with service URL
-        if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           SERVICE_URL=$(cat service-url.txt 2>/dev/null || echo 'URL not available')
-          gh run list --repo ${{ github.repository }} --limit 1 --json databaseId -q '.[0].databaseId' > /dev/null 2>&1
-          # Create a check run using gh CLI (has broader permissions)
-          gh api repos/${{ github.repository }}/check-runs \
-            -X POST \
-            -f name='Preview Environment' \
-            -f head_sha='${{ github.event.pull_request.head.sha }}' \
-            -f status='completed' \
-            -f conclusion='success' \
-            -F output='{
-              "title": "🚀 Preview Deployed",
-              "summary": "Your preview environment is ready!",
-              "text": "**Service URL:** ['$SERVICE_URL']('$SERVICE_URL')\n\nThis preview will be automatically cleaned up when the PR is closed."
-            }' || echo "Warning: Could not create check run, but preview is deployed."
+          cat >> $GITHUB_STEP_SUMMARY <<EOF
+          ## 🚀 Preview Environment Deployed
+          
+          **Service URL:** [$SERVICE_URL]($SERVICE_URL)
+          
+          This preview will be automatically cleaned up when the PR is closed.
+          EOF
