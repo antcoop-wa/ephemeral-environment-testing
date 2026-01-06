@@ -7,7 +7,6 @@ on:
 jobs:
   deploy-preview:
     runs-on: ubuntu-latest
-    environment: Ephem
     steps:
       - name: Verify jq is installed
         run: jq --version
