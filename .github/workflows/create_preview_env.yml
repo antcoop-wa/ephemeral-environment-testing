@@ -11,6 +11,13 @@ jobs:
       - name: Verify jq is installed
         run: jq --version
         
+      - name: Debug network environment
+        run: |
+          echo "--- proxy env vars ---"
+          env | grep -i proxy || true
+          echo "--- curl version ---"
+          curl --version
+        
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -24,10 +31,10 @@ jobs:
           
           # First, check if service with this name already exists
           echo "Checking if service '$SERVICE_NAME' already exists..."
-          LIST_RESPONSE=$(curl -s --request GET \
+          LIST_RESPONSE=$(curl -s --noproxy api.render.com --retry 3 --retry-delay 2 --fail --request GET \
             --url "https://api.render.com/v1/services" \
             --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
-             --header "Accept: application/json")
+            --header "Accept: application/json")
           
           echo "Services list response:"
           echo "$LIST_RESPONSE"
@@ -38,7 +45,7 @@ jobs:
             echo "Service '$SERVICE_NAME' already exists with ID: $SERVICE_ID"
           else
             echo "Service '$SERVICE_NAME' does not exist, creating new one..."
-            SERVICE_RESPONSE=$(curl -v --request POST \
+            SERVICE_RESPONSE=$(curl -v --noproxy api.render.com --retry 3 --retry-delay 2 --fail --request POST \
               --url "https://api.render.com/v1/services" \
               --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
               --header "Accept: application/json" \
@@ -50,7 +57,7 @@ jobs:
                 "branch": "${{ github.head_ref }}",
                 "publishDirectory": "./dist",
                 "autoDeploy": false,
-                 "environmentId": "'$ENVIRONMENT_ID'"
+                "environmentId": "'$ENVIRONMENT_ID'"
               }' 2>&1)
             
             echo "Service Response:"

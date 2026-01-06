@@ -23,7 +23,7 @@ jobs:
             SERVICE_ID=$(cat service-id.txt)
             echo "Using Service ID: $SERVICE_ID"
             # Delete the service using the Render API
-            curl -v --request DELETE \
+            curl -v --noproxy api.render.com --retry 3 --retry-delay 2 --fail --request DELETE \
               --url "https://api.render.com/v1/services/$SERVICE_ID" \
               --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" 2>&1
             echo "Service deletion request completed"
