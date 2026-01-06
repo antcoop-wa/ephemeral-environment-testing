@@ -27,7 +27,7 @@ jobs:
           LIST_RESPONSE=$(curl -s --request GET \
             --url "https://api.render.com/v1/services" \
             --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
-            --header "Accept: application/json"
+             --header "Accept: application/json")
           
           echo "Services list response:"
           echo "$LIST_RESPONSE"
@@ -50,7 +50,7 @@ jobs:
                 "branch": "${{ github.head_ref }}",
                 "publishDirectory": "./dist",
                 "autoDeploy": false,
-                "environmentId": "'$ENVIRONMENT_ID'",
+                 "environmentId": "'$ENVIRONMENT_ID'"
               }' 2>&1)
             
             echo "Service Response:"
@@ -76,7 +76,3 @@ jobs:
       - name: Post URL to PR comment (placeholder)
         # Add a step to comment the preview URL back to the GitHub Pull Request
         run: echo "Preview service is available at some-url-for-pr-${{ github.event.pull_request.number }}"
-          
-      - name: Post URL to PR comment (placeholder)
-        # Add a step to comment the preview URL back to the GitHub Pull Request
-        run: echo "Preview environment is available at some-url-for-pr-${{ github.event.pull_request.number }}"
