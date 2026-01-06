@@ -57,7 +57,7 @@ jobs:
           echo "Repo URL being used: $REPO_URL"
           echo "Branch being used: $BRANCH_NAME"
 
-          SERVICE_ID=$(echo "$LIST_BODY" | jq -r ".services[] | select(.name == \"$SERVICE_NAME\") | .id" 2>/dev/null | head -1)
+          SERVICE_ID=$(echo "$LIST_BODY" | jq -r ".[] | select(.service.name == \"$SERVICE_NAME\") | [.] | first | .service.id" 2>/dev/null | head -1)
           
           if [ -n "$SERVICE_ID" ] && [ "$SERVICE_ID" != "null" ]; then
             echo "Service '$SERVICE_NAME' already exists with ID: $SERVICE_ID"
