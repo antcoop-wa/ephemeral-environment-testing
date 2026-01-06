@@ -25,7 +25,19 @@ jobs:
         run: |
           echo "Creating static site service for PR ${{ github.event.pull_request.number }}"
           SERVICE_NAME="wa-test-pr-${{ github.event.pull_request.number }}-static"
-          ENVIRONMENT_ID="${{ secrets.RENDER_ENV_ID }}"
+          ENVIRONMENT_ID="${{ vars.RENDER_ENV_ID }}"
+          REPO_URL="${{ github.event.pull_request.head.repo.clone_url }}"
+          BRANCH_NAME="${{ github.head_ref }}"
+          
+          # Fail fast with clear message if required secrets are missing
+          if [ -z "$ENVIRONMENT_ID" ]; then
+            echo "ERROR: RENDER_ENV_ID secret is empty. Please set the secret 'RENDER_ENV_ID' in the repository settings."
+            exit 1
+          fi
+          if [ -z "${{ secrets.RENDER_API_KEY }}" ]; then
+            echo "ERROR: RENDER_API_KEY secret is empty. Please set the secret 'RENDER_API_KEY' in the repository settings."
+            exit 1
+          fi
           
           echo "Using Environment ID: $ENVIRONMENT_ID"
           
@@ -42,6 +54,8 @@ jobs:
 
           echo "Services list HTTP status: $LIST_STATUS"
           echo "Services list body: $LIST_BODY"
+          echo "Repo URL being used: $REPO_URL"
+          echo "Branch being used: $BRANCH_NAME"
 
           SERVICE_ID=$(echo "$LIST_BODY" | jq -r ".services[] | select(.name == \"$SERVICE_NAME\") | .id" 2>/dev/null | head -1)
           
