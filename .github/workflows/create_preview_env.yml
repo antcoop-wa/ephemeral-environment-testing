@@ -31,21 +31,25 @@ jobs:
           
           # First, check if service with this name already exists
           echo "Checking if service '$SERVICE_NAME' already exists..."
-          LIST_RESPONSE=$(curl -s --noproxy api.render.com --retry 3 --retry-delay 2 --fail --request GET \
+          LIST_RAW=$(curl -sS --noproxy api.render.com --retry 3 --retry-delay 2 --request GET \
             --url "https://api.render.com/v1/services" \
             --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
-            --header "Accept: application/json")
-          
-          echo "Services list response:"
-          echo "$LIST_RESPONSE"
-          
-          SERVICE_ID=$(echo "$LIST_RESPONSE" | jq -r ".services[] | select(.name == \"$SERVICE_NAME\") | .id" 2>/dev/null | head -1)
+            --header "Accept: application/json" \
+            -w "::HTTP_STATUS::%{http_code}")
+
+          LIST_STATUS=$(echo "$LIST_RAW" | awk -F"::HTTP_STATUS::" '{print $2}')
+          LIST_BODY=$(echo "$LIST_RAW" | sed -e 's/::HTTP_STATUS::.*$//')
+
+          echo "Services list HTTP status: $LIST_STATUS"
+          echo "Services list body: $LIST_BODY"
+
+          SERVICE_ID=$(echo "$LIST_BODY" | jq -r ".services[] | select(.name == \"$SERVICE_NAME\") | .id" 2>/dev/null | head -1)
           
           if [ -n "$SERVICE_ID" ] && [ "$SERVICE_ID" != "null" ]; then
             echo "Service '$SERVICE_NAME' already exists with ID: $SERVICE_ID"
           else
             echo "Service '$SERVICE_NAME' does not exist, creating new one..."
-            SERVICE_RESPONSE=$(curl -v --noproxy api.render.com --retry 3 --retry-delay 2 --fail --request POST \
+            SERVICE_RAW=$(curl -sS --noproxy api.render.com --retry 3 --retry-delay 2 --request POST \
               --url "https://api.render.com/v1/services" \
               --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
               --header "Accept: application/json" \
@@ -58,11 +62,15 @@ jobs:
                 "publishDirectory": "./dist",
                 "autoDeploy": false,
                 "environmentId": "'$ENVIRONMENT_ID'"
-              }' 2>&1)
-            
-            echo "Service Response:"
-            echo "$SERVICE_RESPONSE"
-            SERVICE_ID=$(echo "$SERVICE_RESPONSE" | jq -r '.id' 2>/dev/null)
+              }' -w "::HTTP_STATUS::%{http_code}")
+
+            SERVICE_STATUS=$(echo "$SERVICE_RAW" | awk -F"::HTTP_STATUS::" '{print $2}')
+            SERVICE_BODY=$(echo "$SERVICE_RAW" | sed -e 's/::HTTP_STATUS::.*$//')
+
+            echo "Service create HTTP status: $SERVICE_STATUS"
+            echo "Service create body: $SERVICE_BODY"
+
+            SERVICE_ID=$(echo "$SERVICE_BODY" | jq -r '.id' 2>/dev/null)
             echo "Extracted Service ID: $SERVICE_ID"
           fi
           

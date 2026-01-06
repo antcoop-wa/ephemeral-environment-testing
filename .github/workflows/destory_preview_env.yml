@@ -22,10 +22,15 @@ jobs:
           if [ -f service-id.txt ]; then
             SERVICE_ID=$(cat service-id.txt)
             echo "Using Service ID: $SERVICE_ID"
-            # Delete the service using the Render API
-            curl -v --noproxy api.render.com --retry 3 --retry-delay 2 --fail --request DELETE \
+            # Delete the service using the Render API (capture status/body)
+            DEL_RAW=$(curl -sS --noproxy api.render.com --retry 3 --retry-delay 2 --request DELETE \
               --url "https://api.render.com/v1/services/$SERVICE_ID" \
-              --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" 2>&1
+              --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              -w "::HTTP_STATUS::%{http_code}")
+            DEL_STATUS=$(echo "$DEL_RAW" | awk -F"::HTTP_STATUS::" '{print $2}')
+            DEL_BODY=$(echo "$DEL_RAW" | sed -e 's/::HTTP_STATUS::.*$//')
+            echo "Service delete HTTP status: $DEL_STATUS"
+            echo "Service delete body: $DEL_BODY"
             echo "Service deletion request completed"
           else
             echo "Service ID artifact not found, skipping deletion"
