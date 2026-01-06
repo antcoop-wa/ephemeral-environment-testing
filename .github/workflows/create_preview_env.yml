@@ -19,23 +19,26 @@ jobs:
             --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             --header "Content-Type: application/json" \
             --data '{
-              "name": "pr-${{ github.event.pull_request.number }}-env",
+              "name": "wa-test-pr-${{ github.event.pull_request.number }}-env",
               "description": "Ephemeral environment for PR #${{ github.event.pull_request.number }}"
             }')
           ENVIRONMENT_ID=$(echo "$ENV_RESPONSE" | jq -r '.id')
           echo "Environment ID: $ENVIRONMENT_ID"
           echo "$ENVIRONMENT_ID" > environment-id.txt
 
-      - name: Deploy Service to Environment
+      - name: Deploy Static Site to Environment
         run: |
-          echo "Deploying service to environment for PR ${{ github.event.pull_request.number }}"
+          echo "Deploying static site to environment for PR ${{ github.event.pull_request.number }}"
           ENVIRONMENT_ID=$(cat environment-id.txt)
           DEPLOY_RESPONSE=$(curl --request POST \
             --url "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
             --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             --header "Content-Type: application/json" \
             --data '{
-              "environmentId": "'$ENVIRONMENT_ID'"
+              "environmentId": "'$ENVIRONMENT_ID'",
+              "branch": "${{ github.head_ref }}",
+              "publishDirectory": "./dist",
+              "autoDeploy": "off"
             }')
           DEPLOY_ID=$(echo "$DEPLOY_RESPONSE" | jq -r '.id')
           echo "Deploy ID: $DEPLOY_ID"
