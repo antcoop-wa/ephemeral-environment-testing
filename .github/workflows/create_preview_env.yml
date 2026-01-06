@@ -14,23 +14,44 @@ jobs:
       - name: Create Environment
         run: |
           echo "Creating ephemeral environment for PR ${{ github.event.pull_request.number }}"
-          ENV_RESPONSE=$(curl -v --request POST \
-            --url "https://api.render.com/v1/environments" \
-            --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
-            --header "Content-Type: application/json" \
-            --data '{
-              "name": "wa-test-pr-${{ github.event.pull_request.number }}-env",
-              "description": "Ephemeral environment for PR #${{ github.event.pull_request.number }}",
-              "projectId  ": "${{ secrets.RENDER_PROJECT_ID }}"
-            }' 2>&1)
-          echo "Environment Response:"
-          echo "$ENV_RESPONSE"
-          ENVIRONMENT_ID=$(echo "$ENV_RESPONSE" | jq -r '.id' 2>/dev/null)
-          echo "Extracted Environment ID: $ENVIRONMENT_ID"
+          ENV_NAME="wa-test-pr-${{ github.event.pull_request.number }}-env"
+          
+          # First, check if environment with this name already exists
+          echo "Checking if environment '$ENV_NAME' already exists..."
+          LIST_RESPONSE=$(curl -s --request GET \
+            --url "https://api.render.com/v1/projects/${{ secrets.RENDER_PROJECT_ID }}/environments" \
+            --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}")
+          
+          echo "Environments list response:"
+          echo "$LIST_RESPONSE"
+          
+          ENVIRONMENT_ID=$(echo "$LIST_RESPONSE" | jq -r ".environments[] | select(.name == \"$ENV_NAME\") | .id" 2>/dev/null | head -1)
+          
+          if [ -n "$ENVIRONMENT_ID" ] && [ "$ENVIRONMENT_ID" != "null" ]; then
+            echo "Environment '$ENV_NAME' already exists with ID: $ENVIRONMENT_ID"
+          else
+            echo "Environment '$ENV_NAME' does not exist, creating new one..."
+            ENV_RESPONSE=$(curl -v --request POST \
+              --url "https://api.render.com/v1/environments" \
+              --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              --header "Content-Type: application/json" \
+              --data '{
+                "name": "'$ENV_NAME'",
+                "description": "Ephemeral environment for PR #${{ github.event.pull_request.number }}",
+                "projectId": "${{ secrets.RENDER_PROJECT_ID }}"
+              }' 2>&1)
+            
+            echo "Environment Response:"
+            echo "$ENV_RESPONSE"
+            ENVIRONMENT_ID=$(echo "$ENV_RESPONSE" | jq -r '.id' 2>/dev/null)
+            echo "Extracted Environment ID: $ENVIRONMENT_ID"
+          fi
+          
           if [ -z "$ENVIRONMENT_ID" ] || [ "$ENVIRONMENT_ID" = "null" ]; then
-            echo "ERROR: Failed to extract environment ID"
+            echo "ERROR: Failed to get environment ID"
             exit 1
           fi
+          
           echo "$ENVIRONMENT_ID" > environment-id.txt
           echo "ENVIRONMENT_ID=$ENVIRONMENT_ID" >> $GITHUB_OUTPUT
 
