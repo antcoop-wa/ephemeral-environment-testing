@@ -74,7 +74,7 @@ jobs:
                 "repo": "${{ github.event.pull_request.head.repo.clone_url }}",
                 "branch": "${{ github.head_ref }}",
                 "publishDirectory": "./dist",
-                "autoDeploy": false,
+                "autoDeploy": "yes",
                 "environmentId": "'$ENVIRONMENT_ID'",
                 "ownerId": "${{ secrets.RENDER_OWNER_ID }}"
               }' -w "::HTTP_STATUS::%{http_code}")
