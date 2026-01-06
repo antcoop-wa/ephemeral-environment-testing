@@ -75,7 +75,8 @@ jobs:
                 "branch": "${{ github.head_ref }}",
                 "publishDirectory": "./dist",
                 "autoDeploy": false,
-                "environmentId": "'$ENVIRONMENT_ID'"
+                "environmentId": "'$ENVIRONMENT_ID'",
+                "ownerId": "${{ secrets.RENDER_OWNER_ID }}"
               }' -w "::HTTP_STATUS::%{http_code}")
 
             SERVICE_STATUS=$(echo "$SERVICE_RAW" | awk -F"::HTTP_STATUS::" '{print $2}')
