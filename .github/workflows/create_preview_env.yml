@@ -31,7 +31,7 @@ jobs:
           
           # Fail fast with clear message if required secrets are missing
           if [ -z "$ENVIRONMENT_ID" ]; then
-            echo "ERROR: RENDER_ENV_ID secret is empty. Please set the secret 'RENDER_ENV_ID' in the repository settings."
+            echo "ERROR: RENDER_ENV_ID variable is empty. Please set the variable 'RENDER_ENV_ID' in the repository settings."
             exit 1
           fi
           if [ -z "${{ secrets.RENDER_API_KEY }}" ]; then
