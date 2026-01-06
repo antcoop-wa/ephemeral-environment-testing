@@ -1,4 +1,4 @@
-name: Create Render Preview Environment
+name: Create Render Preview Service
 
 on:
   pull_request:
@@ -8,23 +8,201 @@ jobs:
   deploy-preview:
     runs-on: ubuntu-latest
     steps:
+      - name: Verify jq is installed
+        run: jq --version
+        
+      - name: Debug network environment
+        run: |
+          echo "--- proxy env vars ---"
+          env | grep -i proxy || true
+          echo "--- curl version ---"
+          curl --version
+        
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy to Render
-        # You'll likely need a custom script or a third-party action to create an entirely new *ephemeral* service on Render.
-        # For simplicity with the standard Render setup, you might trigger a 'deploy hook' on a specific *preview* service, 
-        # but true ephemeral environments require more advanced tools like those mentioned in the intro.
-        # A simple deployment trigger for a pre-existing "preview" service would look like this (less truly ephemeral):
+      - name: Create Static Site Service
         run: |
-          # This is a placeholder for triggering a specific deploy/environment creation logic
-          # A typical approach involves using the Render API to manage services dynamically
-          echo "Triggering deployment for PR ${{ github.event.pull_request.number }}"
-          # Example using a placeholder script with secrets (requires a custom script to manage service creation/deletion)
-          # curl --request POST --url "api.render.com{{ secrets.RENDER_SERVICE_ID }}/deploys" --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}"
+          echo "Creating static site service for PR ${{ github.event.pull_request.number }}"
+          SERVICE_NAME="wa-test-pr-${{ github.event.pull_request.number }}-static"
+          ENVIRONMENT_ID="${{ vars.RENDER_ENV_ID }}"
+          REPO_URL="${{ github.event.pull_request.head.repo.clone_url }}"
+          BRANCH_NAME="${{ github.head_ref }}"
           
-          # More complex, robust solutions use Infrastructure as Code tools (Terraform/Helm) or platforms like Uffizzi/Humanitec
+          # Fail fast with clear message if required secrets are missing
+          if [ -z "$ENVIRONMENT_ID" ]; then
+            echo "ERROR: RENDER_ENV_ID variable is empty. Please set the variable 'RENDER_ENV_ID' in the repository settings."
+            exit 1
+          fi
+          if [ -z "${{ secrets.RENDER_API_KEY }}" ]; then
+            echo "ERROR: RENDER_API_KEY secret is empty. Please set the secret 'RENDER_API_KEY' in the repository settings."
+            exit 1
+          fi
           
-      - name: Post URL to PR comment (placeholder)
-        # Add a step to comment the preview URL back to the GitHub Pull Request
-        run: echo "Preview environment is available at some-url-for-pr-${{ github.event.pull_request.number }}"
+          echo "Using Environment ID: $ENVIRONMENT_ID"
+          
+          # First, check if service with this name already exists
+          echo "Checking if service '$SERVICE_NAME' already exists..."
+          LIST_RAW=$(curl -sS --noproxy api.render.com --retry 3 --retry-delay 2 --request GET \
+            --url "https://api.render.com/v1/services" \
+            --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            --header "Accept: application/json" \
+            -w "::HTTP_STATUS::%{http_code}")
+
+          LIST_STATUS=$(echo "$LIST_RAW" | awk -F"::HTTP_STATUS::" '{print $2}')
+          LIST_BODY=$(echo "$LIST_RAW" | sed -e 's/::HTTP_STATUS::.*$//')
+
+          echo "Services list HTTP status: $LIST_STATUS"
+          echo "Services list body: $LIST_BODY"
+          echo "Repo URL being used: $REPO_URL"
+          echo "Branch being used: $BRANCH_NAME"
+
+          SERVICE_ID=$(echo "$LIST_BODY" | jq -r ".[] | select(.service.name == \"$SERVICE_NAME\") | [.] | first | .service.id" 2>/dev/null | head -1)
+          SERVICE_URL=$(echo "$LIST_BODY" | jq -r ".[] | select(.service.name == \"$SERVICE_NAME\") | [.] | first | .service.serviceDetails.url" 2>/dev/null | head -1)
+          
+          if [ -n "$SERVICE_ID" ] && [ "$SERVICE_ID" != "null" ]; then
+            echo "Service '$SERVICE_NAME' already exists with ID: $SERVICE_ID"
+            echo "Service URL: $SERVICE_URL"
+            echo "Updating existing service..."
+            SERVICE_RAW=$(curl -sS --noproxy api.render.com --retry 3 --retry-delay 2 --request PATCH \
+              --url "https://api.render.com/v1/services/$SERVICE_ID" \
+              --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              --header "Accept: application/json" \
+              --header "Content-Type: application/json" \
+             --data '{
+              "repo": "${{ github.event.pull_request.head.repo.clone_url }}",
+              "branch": "${{ github.head_ref }}",
+              "environmentId": "'$ENVIRONMENT_ID'",
+              "ownerId": "${{ secrets.RENDER_OWNER_ID }}",
+              "serviceDetails": {
+                "buildCommand": "npm install; npm run build",
+                "publishPath": "./dist"
+              }
+            }' -w "::HTTP_STATUS::%{http_code}")
+
+            SERVICE_STATUS=$(echo "$SERVICE_RAW" | awk -F"::HTTP_STATUS::" '{print $2}')
+            SERVICE_BODY=$(echo "$SERVICE_RAW" | sed -e 's/::HTTP_STATUS::.*$//')
+
+            echo "Service update HTTP status: $SERVICE_STATUS"
+            echo "Service update body: $SERVICE_BODY"
+
+            SERVICE_ID=$(echo "$SERVICE_BODY" | jq -r '.id' 2>/dev/null)
+            SERVICE_URL=$(echo "$SERVICE_BODY" | jq -r '.serviceDetails.url' 2>/dev/null)
+            echo "Updated Service ID: $SERVICE_ID"
+            echo "Updated Service URL: $SERVICE_URL"
+          else
+            echo "Service '$SERVICE_NAME' does not exist, creating new one..."
+            SERVICE_RAW=$(curl -sS --noproxy api.render.com --retry 3 --retry-delay 2 --request POST \
+              --url "https://api.render.com/v1/services" \
+              --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              --header "Accept: application/json" \
+              --header "Content-Type: application/json" \
+              --data '{
+                "type": "static_site",
+                "name": "'$SERVICE_NAME'",
+                "repo": "${{ github.event.pull_request.head.repo.clone_url }}",
+                "branch": "${{ github.head_ref }}",
+                "autoDeploy": "yes",
+                "environmentId": "'$ENVIRONMENT_ID'",
+                "ownerId": "${{ secrets.RENDER_OWNER_ID }}",
+                "serviceDetails": {
+                  "buildCommand": "npm install; npm run build",
+                  "publishPath": "./dist"
+                }
+              }' -w "::HTTP_STATUS::%{http_code}")
+
+            SERVICE_STATUS=$(echo "$SERVICE_RAW" | awk -F"::HTTP_STATUS::" '{print $2}')
+            SERVICE_BODY=$(echo "$SERVICE_RAW" | sed -e 's/::HTTP_STATUS::.*$//')
+
+            echo "Service create HTTP status: $SERVICE_STATUS"
+            echo "Service create body: $SERVICE_BODY"
+
+            SERVICE_ID=$(echo "$SERVICE_BODY" | jq -r '.service.id' 2>/dev/null)
+            SERVICE_URL=$(echo "$SERVICE_BODY" | jq -r '.service.serviceDetails.url' 2>/dev/null)
+            echo "Extracted Service ID: $SERVICE_ID"
+            echo "Extracted Service URL: $SERVICE_URL"
+          fi
+          
+          if [ -z "$SERVICE_ID" ] || [ "$SERVICE_ID" = "null" ]; then
+            echo "ERROR: Failed to get service ID"
+            exit 1
+          fi
+          
+          echo "$SERVICE_ID" > service-id.txt
+          echo "$SERVICE_URL" > service-url.txt
+          echo "SERVICE_ID=$SERVICE_ID" >> $GITHUB_OUTPUT
+          echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_OUTPUT
+
+      - name: Upload service ID artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: service-id
+          path: service-id.txt
+
+      - name: Upload service URL artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: service-url
+          path: service-url.txt
+
+      - name: Clean up previous bot comments
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              const comments = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number
+              });
+              
+              for (const comment of comments.data) {
+                // Delete previous bot service URL comments
+                if (comment.user.type === 'Bot' && comment.body.includes('Preview environment deployed')) {
+                  await github.rest.issues.deleteComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    comment_id: comment.id
+                  });
+                  console.log('Deleted previous bot comment:', comment.id);
+                }
+              }
+            } catch (err) {
+              console.log('Could not clean up comments:', err.message);
+              // Don't fail the workflow if comment cleanup fails
+            }
+          
+      - name: Post URL to PR review comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            let serviceUrl = 'URL not available';
+            try {
+              if (fs.existsSync('service-url.txt')) {
+                serviceUrl = fs.readFileSync('service-url.txt', 'utf8').trim();
+              }
+            } catch (e) {
+              console.log('Could not read service-url.txt');
+            }
+            
+            // Post as review comment (works on forks)
+            github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              body: `🚀 Preview environment deployed!\n\n**Service URL:** ${serviceUrl}\n\nThis preview will be cleaned up when the PR is closed.`,
+              event: 'COMMENT'
+            }).catch(err => {
+              console.log('Review comment failed, trying simple comment...');
+              // Fallback: try regular comment
+              return github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `🚀 Preview environment deployed!\n\n**Service URL:** ${serviceUrl}\n\nThis preview will be cleaned up when the PR is closed.`
+              });
+            });

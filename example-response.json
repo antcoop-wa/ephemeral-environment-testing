@@ -1,0 +1,19 @@
+{
+  "id": "string",
+  "commit": {
+    "id": "string",
+    "message": "string",
+    "createdAt": "2026-01-06T15:08:12.907Z"
+  },
+  "image": {
+    "ref": "string",
+    "sha": "string",
+    "registryCredential": "string"
+  },
+  "status": "created",
+  "trigger": "api",
+  "startedAt": "2026-01-06T15:08:12.907Z",
+  "finishedAt": "2026-01-06T15:08:12.907Z",
+  "createdAt": "2026-01-06T15:08:12.907Z",
+  "updatedAt": "2026-01-06T15:08:12.907Z"
+}

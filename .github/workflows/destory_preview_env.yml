@@ -1,18 +1,66 @@
-name: Destroy Render Preview Environment
+name: Destroy Render Preview Service
 
 on:
   pull_request:
-    types: [closed, merged]
+    types: [closed]
 
 jobs:
   destroy-preview:
     runs-on: ubuntu-latest
     steps:
-      - name: Destroy Environment
-        # This step needs logic to delete the specific service instance or namespace created for the PR.
-        # As with the creation step, this is complex with basic Render setup.
-        # A custom script would interact with the Render API to delete the service by ID.
+      - name: Remove bot comments
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              const comments = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number
+              });
+              
+              for (const comment of comments.data) {
+                // Delete comments that look like bot service URL comments
+                if (comment.user.type === 'Bot' && comment.body.includes('Preview environment deployed')) {
+                  await github.rest.issues.deleteComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    comment_id: comment.id
+                  });
+                  console.log('Deleted bot comment:', comment.id);
+                }
+              }
+            } catch (err) {
+              console.log('Could not delete comments:', err.message);
+              // Don't fail the workflow if comment deletion fails
+            }
+      
+      - name: Download service ID artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: service-id
+          path: ./
+        continue-on-error: true
+
+      - name: Destroy Service
+        # This step deletes the service created for the PR
         run: |
-          echo "Destroying environment for PR ${{ github.event.pull_request.number }}"
-          # Example: A custom script 'delete-render-service.sh' would be called here
-          # ./delete-render-service.sh ${{ secrets.RENDER_API_KEY }} ${{ github.event.pull_request.number }}
+          echo "Destroying service for PR ${{ github.event.pull_request.number }}"
+          if [ -f service-id.txt ]; then
+            SERVICE_ID=$(cat service-id.txt)
+            echo "Using Service ID: $SERVICE_ID"
+            # Delete the service using the Render API (capture status/body)
+            DEL_RAW=$(curl -sS --noproxy api.render.com --retry 3 --retry-delay 2 --request DELETE \
+              --url "https://api.render.com/v1/services/$SERVICE_ID" \
+              --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              -w "::HTTP_STATUS::%{http_code}")
+            DEL_STATUS=$(echo "$DEL_RAW" | awk -F"::HTTP_STATUS::" '{print $2}')
+            DEL_BODY=$(echo "$DEL_RAW" | sed -e 's/::HTTP_STATUS::.*$//')
+            echo "Service delete HTTP status: $DEL_STATUS"
+            echo "Service delete body: $DEL_BODY"
+            echo "Service deletion request completed"
+          else
+            echo "Service ID artifact not found, skipping deletion"
+          fi
+          
