@@ -23,96 +23,105 @@ jobs:
 
       - name: Create Static Site Service
         run: |
-          set -e
-          
-          # Helper function to parse curl response with status
-          parse_response() {
-            local raw="$1"
-            echo "$raw" | awk -F"::HTTP_STATUS::" '{print $1}'
-          }
-          
-          get_status() {
-            local raw="$1"
-            echo "$raw" | awk -F"::HTTP_STATUS::" '{print $2}'
-          }
-          
-          # Helper to make curl requests
-          curl_api() {
-            local method="$1"
-            local url="$2"
-            local data="$3"
-            curl -sS --noproxy api.render.com --retry 3 --retry-delay 2 \
-              --request "$method" \
-              --url "$url" \
-              --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
-              --header "Accept: application/json" \
-              --header "Content-Type: application/json" \
-              ${data:+--data "$data"} \
-              -w "::HTTP_STATUS::%{http_code}"
-          }
-          
-          # Setup
           echo "Creating static site service for PR ${{ github.event.pull_request.number }}"
           SERVICE_NAME="wa-test-pr-${{ github.event.pull_request.number }}-static"
           ENVIRONMENT_ID="${{ vars.RENDER_ENV_ID }}"
+          REPO_URL="${{ github.event.pull_request.head.repo.clone_url }}"
+          BRANCH_NAME="${{ github.head_ref }}"
           
-          # Validate config
-          [ -n "$ENVIRONMENT_ID" ] || { echo "ERROR: RENDER_ENV_ID is empty"; exit 1; }
-          [ -n "${{ secrets.RENDER_API_KEY }}" ] || { echo "ERROR: RENDER_API_KEY is empty"; exit 1; }
-          
-          echo "Environment ID: $ENVIRONMENT_ID"
-          echo "Service Name: $SERVICE_NAME"
-          echo "Repo: ${{ github.event.pull_request.head.repo.clone_url }}"
-          echo "Branch: ${{ github.head_ref }}"
-          
-          # Check if service exists
-          echo "Checking for existing service..."
-          LIST_RAW=$(curl_api GET "https://api.render.com/v1/services")
-          LIST_BODY=$(parse_response "$LIST_RAW")
-          LIST_STATUS=$(get_status "$LIST_RAW")
-          
-          echo "List status: $LIST_STATUS"
-          SERVICE_ID=$(echo "$LIST_BODY" | jq -r ".[] | select(.service.name == \"$SERVICE_NAME\") | .service.id" 2>/dev/null | head -1)
-          SERVICE_URL=$(echo "$LIST_BODY" | jq -r ".[] | select(.service.name == \"$SERVICE_NAME\") | .service.serviceDetails.url" 2>/dev/null | head -1)
-          
-          # Create or update service
-          if [ -n "$SERVICE_ID" ] && [ "$SERVICE_ID" != "null" ]; then
-            echo "Service exists (ID: $SERVICE_ID). Updating..."
-            UPDATE_DATA='{"branch": "${{ github.head_ref }}", "autoDeploy": "yes"}'
-            SERVICE_RAW=$(curl_api PATCH "https://api.render.com/v1/services/$SERVICE_ID" "$UPDATE_DATA")
-            OP="update"
-          else
-            echo "Service not found. Creating new service..."
-            CREATE_DATA='{
-              "type": "static_site",
-              "name": "'$SERVICE_NAME'",
-              "repo": "${{ github.event.pull_request.head.repo.clone_url }}",
-              "branch": "${{ github.head_ref }}",
-              "autoDeploy": "yes",
-              "environmentId": "'$ENVIRONMENT_ID'",
-              "ownerId": "${{ secrets.RENDER_OWNER_ID }}",
-              "serviceDetails": {
-                "buildCommand": "npm install; npm run build",
-                "publishPath": "./dist"
-              }
-            }'
-            SERVICE_RAW=$(curl_api POST "https://api.render.com/v1/services" "$CREATE_DATA")
-            OP="create"
+          # Fail fast with clear message if required secrets are missing
+          if [ -z "$ENVIRONMENT_ID" ]; then
+            echo "ERROR: RENDER_ENV_ID variable is empty. Please set the variable 'RENDER_ENV_ID' in the repository settings."
+            exit 1
+          fi
+          if [ -z "${{ secrets.RENDER_API_KEY }}" ]; then
+            echo "ERROR: RENDER_API_KEY secret is empty. Please set the secret 'RENDER_API_KEY' in the repository settings."
+            exit 1
           fi
           
-          # Parse response
-          SERVICE_BODY=$(parse_response "$SERVICE_RAW")
-          SERVICE_STATUS=$(get_status "$SERVICE_RAW")
-          echo "Service $OP status: $SERVICE_STATUS"
-          echo "Response: $SERVICE_BODY"
+          echo "Using Environment ID: $ENVIRONMENT_ID"
           
-          SERVICE_ID=$(echo "$SERVICE_BODY" | jq -r '.service.id' 2>/dev/null)
-          SERVICE_URL=$(echo "$SERVICE_BODY" | jq -r '.service.serviceDetails.url' 2>/dev/null)
+          # First, check if service with this name already exists
+          echo "Checking if service '$SERVICE_NAME' already exists..."
+          LIST_RAW=$(curl -sS --noproxy api.render.com --retry 3 --retry-delay 2 --request GET \
+            --url "https://api.render.com/v1/services" \
+            --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            --header "Accept: application/json" \
+            -w "::HTTP_STATUS::%{http_code}")
+
+          LIST_STATUS=$(echo "$LIST_RAW" | awk -F"::HTTP_STATUS::" '{print $2}')
+          LIST_BODY=$(echo "$LIST_RAW" | sed -e 's/::HTTP_STATUS::.*$//')
+
+          echo "Services list HTTP status: $LIST_STATUS"
+          echo "Services list body: $LIST_BODY"
+          echo "Repo URL being used: $REPO_URL"
+          echo "Branch being used: $BRANCH_NAME"
+
+          SERVICE_ID=$(echo "$LIST_BODY" | jq -r ".[] | select(.service.name == \"$SERVICE_NAME\") | [.] | first | .service.id" 2>/dev/null | head -1)
+          SERVICE_URL=$(echo "$LIST_BODY" | jq -r ".[] | select(.service.name == \"$SERVICE_NAME\") | [.] | first | .service.serviceDetails.url" 2>/dev/null | head -1)
           
-          [ -n "$SERVICE_ID" ] && [ "$SERVICE_ID" != "null" ] || { echo "ERROR: Failed to get service ID"; exit 1; }
+          if [ -n "$SERVICE_ID" ] && [ "$SERVICE_ID" != "null" ]; then
+            echo "Service '$SERVICE_NAME' already exists with ID: $SERVICE_ID"
+            echo "Service URL: $SERVICE_URL"
+            echo "Updating existing service..."
+            SERVICE_RAW=$(curl -sS --noproxy api.render.com --retry 3 --retry-delay 2 --request PATCH \
+              --url "https://api.render.com/v1/services/$SERVICE_ID" \
+              --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              --header "Accept: application/json" \
+              --header "Content-Type: application/json" \
+              --data '{
+                "branch": "${{ github.head_ref }}",
+                "autoDeploy": "yes"
+              }' -w "::HTTP_STATUS::%{http_code}")
+
+            SERVICE_STATUS=$(echo "$SERVICE_RAW" | awk -F"::HTTP_STATUS::" '{print $2}')
+            SERVICE_BODY=$(echo "$SERVICE_RAW" | sed -e 's/::HTTP_STATUS::.*$//')
+
+            echo "Service update HTTP status: $SERVICE_STATUS"
+            echo "Service update body: $SERVICE_BODY"
+
+            SERVICE_ID=$(echo "$SERVICE_BODY" | jq -r '.service.id' 2>/dev/null)
+            SERVICE_URL=$(echo "$SERVICE_BODY" | jq -r '.service.serviceDetails.url' 2>/dev/null)
+            echo "Updated Service ID: $SERVICE_ID"
+            echo "Updated Service URL: $SERVICE_URL"
+          else
+            echo "Service '$SERVICE_NAME' does not exist, creating new one..."
+            SERVICE_RAW=$(curl -sS --noproxy api.render.com --retry 3 --retry-delay 2 --request POST \
+              --url "https://api.render.com/v1/services" \
+              --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              --header "Accept: application/json" \
+              --header "Content-Type: application/json" \
+              --data '{
+                "type": "static_site",
+                "name": "'$SERVICE_NAME'",
+                "repo": "${{ github.event.pull_request.head.repo.clone_url }}",
+                "branch": "${{ github.head_ref }}",
+                "autoDeploy": "yes",
+                "environmentId": "'$ENVIRONMENT_ID'",
+                "ownerId": "${{ secrets.RENDER_OWNER_ID }}",
+                "serviceDetails": {
+                  "buildCommand": "npm install; npm run build",
+                  "publishPath": "./dist"
+                }
+              }' -w "::HTTP_STATUS::%{http_code}")
+
+            SERVICE_STATUS=$(echo "$SERVICE_RAW" | awk -F"::HTTP_STATUS::" '{print $2}')
+            SERVICE_BODY=$(echo "$SERVICE_RAW" | sed -e 's/::HTTP_STATUS::.*$//')
+
+            echo "Service create HTTP status: $SERVICE_STATUS"
+            echo "Service create body: $SERVICE_BODY"
+
+            SERVICE_ID=$(echo "$SERVICE_BODY" | jq -r '.service.id' 2>/dev/null)
+            SERVICE_URL=$(echo "$SERVICE_BODY" | jq -r '.service.serviceDetails.url' 2>/dev/null)
+            echo "Extracted Service ID: $SERVICE_ID"
+            echo "Extracted Service URL: $SERVICE_URL"
+          fi
           
-          echo "Service ID: $SERVICE_ID"
-          echo "Service URL: $SERVICE_URL"
+          if [ -z "$SERVICE_ID" ] || [ "$SERVICE_ID" = "null" ]; then
+            echo "ERROR: Failed to get service ID"
+            exit 1
+          fi
+          
           echo "$SERVICE_ID" > service-id.txt
           echo "$SERVICE_URL" > service-url.txt
           echo "SERVICE_ID=$SERVICE_ID" >> $GITHUB_OUTPUT
