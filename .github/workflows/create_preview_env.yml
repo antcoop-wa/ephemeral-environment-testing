@@ -15,13 +15,13 @@ jobs:
         run: |
           echo "Creating ephemeral environment for PR ${{ github.event.pull_request.number }}"
           ENV_RESPONSE=$(curl -v --request POST \
-            --url "https://api.render.com/v1/projects/environments" \
+            --url "https://api.render.com/v1/environments" \
             --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             --header "Content-Type: application/json" \
             --data '{
               "name": "wa-test-pr-${{ github.event.pull_request.number }}-env",
               "description": "Ephemeral environment for PR #${{ github.event.pull_request.number }}",
-              "projectId": "${{ secrets.RENDER_PROJECT_ID }}"
+              "projectId  ": "${{ secrets.RENDER_PROJECT_ID }}"
             }' 2>&1)
           echo "Environment Response:"
           echo "$ENV_RESPONSE"
