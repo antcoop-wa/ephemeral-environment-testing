@@ -22,14 +22,17 @@ jobs:
               "name": "wa-test-pr-${{ github.event.pull_request.number }}-env",
               "description": "Ephemeral environment for PR #${{ github.event.pull_request.number }}"
             }')
+          echo "Environment Response: $ENV_RESPONSE"
           ENVIRONMENT_ID=$(echo "$ENV_RESPONSE" | jq -r '.id')
           echo "Environment ID: $ENVIRONMENT_ID"
           echo "$ENVIRONMENT_ID" > environment-id.txt
+          echo "ENVIRONMENT_ID=$ENVIRONMENT_ID" >> $GITHUB_OUTPUT
 
       - name: Create Static Site Service in Environment
         run: |
           echo "Creating static site service in environment for PR ${{ github.event.pull_request.number }}"
           ENVIRONMENT_ID=$(cat environment-id.txt)
+          echo "Using Environment ID: $ENVIRONMENT_ID"
           SERVICE_RESPONSE=$(curl --request POST \
             --url "https://api.render.com/v1/environments/$ENVIRONMENT_ID/services" \
             --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
@@ -42,9 +45,11 @@ jobs:
               "publishDirectory": "./dist",
               "autoDeploy": false
             }')
+          echo "Service Response: $SERVICE_RESPONSE"
           SERVICE_ID=$(echo "$SERVICE_RESPONSE" | jq -r '.id')
           echo "Service ID: $SERVICE_ID"
           echo "$SERVICE_ID" > service-id.txt
+          echo "SERVICE_ID=$SERVICE_ID" >> $GITHUB_OUTPUT
 
       - name: Upload environment ID artifact
         uses: actions/upload-artifact@v4
