@@ -75,10 +75,13 @@ jobs:
                 "name": "'$SERVICE_NAME'",
                 "repo": "${{ github.event.pull_request.head.repo.clone_url }}",
                 "branch": "${{ github.head_ref }}",
-                "publishDirectory": "./dist",
                 "autoDeploy": "yes",
                 "environmentId": "'$ENVIRONMENT_ID'",
-                "ownerId": "${{ secrets.RENDER_OWNER_ID }}"
+                "ownerId": "${{ secrets.RENDER_OWNER_ID }}",
+                "serviceDetails": {
+                  "buildCommand": "npm install; npm run build",
+                  "publishPath": "./dist"
+                }
               }' -w "::HTTP_STATUS::%{http_code}")
 
             SERVICE_STATUS=$(echo "$SERVICE_RAW" | awk -F"::HTTP_STATUS::" '{print $2}')
