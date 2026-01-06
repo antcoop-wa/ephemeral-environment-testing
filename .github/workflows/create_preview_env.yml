@@ -144,6 +144,34 @@ jobs:
         with:
           name: service-url
           path: service-url.txt
+
+      - name: Clean up previous bot comments
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              const comments = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number
+              });
+              
+              for (const comment of comments.data) {
+                // Delete previous bot service URL comments
+                if (comment.user.type === 'Bot' && comment.body.includes('Preview environment deployed')) {
+                  await github.rest.issues.deleteComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    comment_id: comment.id
+                  });
+                  console.log('Deleted previous bot comment:', comment.id);
+                }
+              }
+            } catch (err) {
+              console.log('Could not clean up comments:', err.message);
+              // Don't fail the workflow if comment cleanup fails
+            }
           
       - name: Post URL to PR review comment
         if: always()
