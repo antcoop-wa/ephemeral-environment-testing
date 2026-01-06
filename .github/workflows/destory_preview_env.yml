@@ -47,9 +47,38 @@ jobs:
         # This step deletes the service created for the PR
         run: |
           echo "Destroying service for PR ${{ github.event.pull_request.number }}"
+          SERVICE_NAME="wa-test-pr-${{ github.event.pull_request.number }}-static"
+          SERVICE_ID=""
+          
+          # Try to get SERVICE_ID from artifact first
           if [ -f service-id.txt ]; then
             SERVICE_ID=$(cat service-id.txt)
-            echo "Using Service ID: $SERVICE_ID"
+            echo "Found service ID from artifact: $SERVICE_ID"
+          else
+            echo "Artifact not found, querying API for service by name: $SERVICE_NAME"
+            # Query the API to find the service by name
+            LIST_RAW=$(curl -sS --noproxy api.render.com --retry 3 --retry-delay 2 --request GET \
+              --url "https://api.render.com/v1/services" \
+              --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              --header "Accept: application/json" \
+              -w "::HTTP_STATUS::%{http_code}")
+            
+            LIST_STATUS=$(echo "$LIST_RAW" | awk -F"::HTTP_STATUS::" '{print $2}')
+            LIST_BODY=$(echo "$LIST_RAW" | sed -e 's/::HTTP_STATUS::.*$//')
+            
+            echo "Services list HTTP status: $LIST_STATUS"
+            SERVICE_ID=$(echo "$LIST_BODY" | jq -r ".[] | select(.service.name == \"$SERVICE_NAME\") | .service.id" 2>/dev/null | head -1)
+            
+            if [ -z "$SERVICE_ID" ] || [ "$SERVICE_ID" = "null" ]; then
+              echo "Warning: Could not find service '$SERVICE_NAME' in API response"
+              echo "Skipping service deletion"
+              exit 0
+            fi
+            echo "Found service ID from API: $SERVICE_ID"
+          fi
+          
+          if [ -n "$SERVICE_ID" ] && [ "$SERVICE_ID" != "null" ]; then
+            echo "Deleting service with ID: $SERVICE_ID"
             # Delete the service using the Render API (capture status/body)
             DEL_RAW=$(curl -sS --noproxy api.render.com --retry 3 --retry-delay 2 --request DELETE \
               --url "https://api.render.com/v1/services/$SERVICE_ID" \
@@ -61,6 +90,6 @@ jobs:
             echo "Service delete body: $DEL_BODY"
             echo "Service deletion request completed"
           else
-            echo "Service ID artifact not found, skipping deletion"
+            echo "Service ID not available, skipping deletion"
           fi
           
