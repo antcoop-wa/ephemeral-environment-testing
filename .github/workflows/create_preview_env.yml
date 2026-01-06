@@ -14,17 +14,23 @@ jobs:
       - name: Create Environment
         run: |
           echo "Creating ephemeral environment for PR ${{ github.event.pull_request.number }}"
-          ENV_RESPONSE=$(curl --request POST \
-            --url "https://api.render.com/v1/projects/${{ secrets.RENDER_PROJECT_ID }}/environments" \
+          ENV_RESPONSE=$(curl -v --request POST \
+            --url "https://api.render.com/v1/projects/environments" \
             --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             --header "Content-Type: application/json" \
             --data '{
               "name": "wa-test-pr-${{ github.event.pull_request.number }}-env",
-              "description": "Ephemeral environment for PR #${{ github.event.pull_request.number }}"
-            }')
-          echo "Environment Response: $ENV_RESPONSE"
-          ENVIRONMENT_ID=$(echo "$ENV_RESPONSE" | jq -r '.id')
-          echo "Environment ID: $ENVIRONMENT_ID"
+              "description": "Ephemeral environment for PR #${{ github.event.pull_request.number }}",
+              "projectId": "${{ secrets.RENDER_PROJECT_ID }}"
+            }' 2>&1)
+          echo "Environment Response:"
+          echo "$ENV_RESPONSE"
+          ENVIRONMENT_ID=$(echo "$ENV_RESPONSE" | jq -r '.id' 2>/dev/null)
+          echo "Extracted Environment ID: $ENVIRONMENT_ID"
+          if [ -z "$ENVIRONMENT_ID" ] || [ "$ENVIRONMENT_ID" = "null" ]; then
+            echo "ERROR: Failed to extract environment ID"
+            exit 1
+          fi
           echo "$ENVIRONMENT_ID" > environment-id.txt
           echo "ENVIRONMENT_ID=$ENVIRONMENT_ID" >> $GITHUB_OUTPUT
 
@@ -33,7 +39,7 @@ jobs:
           echo "Creating static site service in environment for PR ${{ github.event.pull_request.number }}"
           ENVIRONMENT_ID=$(cat environment-id.txt)
           echo "Using Environment ID: $ENVIRONMENT_ID"
-          SERVICE_RESPONSE=$(curl --request POST \
+          SERVICE_RESPONSE=$(curl -v --request POST \
             --url "https://api.render.com/v1/environments/$ENVIRONMENT_ID/services" \
             --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             --header "Content-Type: application/json" \
@@ -44,10 +50,15 @@ jobs:
               "branch": "${{ github.head_ref }}",
               "publishDirectory": "./dist",
               "autoDeploy": false
-            }')
-          echo "Service Response: $SERVICE_RESPONSE"
-          SERVICE_ID=$(echo "$SERVICE_RESPONSE" | jq -r '.id')
-          echo "Service ID: $SERVICE_ID"
+            }' 2>&1)
+          echo "Service Response:"
+          echo "$SERVICE_RESPONSE"
+          SERVICE_ID=$(echo "$SERVICE_RESPONSE" | jq -r '.id' 2>/dev/null)
+          echo "Extracted Service ID: $SERVICE_ID"
+          if [ -z "$SERVICE_ID" ] || [ "$SERVICE_ID" = "null" ]; then
+            echo "ERROR: Failed to extract service ID"
+            exit 1
+          fi
           echo "$SERVICE_ID" > service-id.txt
           echo "SERVICE_ID=$SERVICE_ID" >> $GITHUB_OUTPUT
 
