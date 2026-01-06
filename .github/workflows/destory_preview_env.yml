@@ -1,4 +1,4 @@
-name: Destroy Render Preview Environment
+name: Destroy Render Preview Service
 
 on:
   pull_request:
@@ -8,25 +8,26 @@ jobs:
   destroy-preview:
     runs-on: ubuntu-latest
     steps:
-      - name: Download environment ID artifact
+      - name: Download service ID artifact
         uses: actions/download-artifact@v4
         with:
-          name: environment-id
+          name: service-id
           path: ./
         continue-on-error: true
 
-      - name: Destroy Environment
-        # This step deletes the ephemeral environment created for the PR
+      - name: Destroy Service
+        # This step deletes the service created for the PR
         run: |
-          echo "Destroying environment for PR ${{ github.event.pull_request.number }}"
-          if [ -f environment-id.txt ]; then
-            ENVIRONMENT_ID=$(cat environment-id.txt)
-            echo "Using Environment ID: $ENVIRONMENT_ID"
-            # Delete the environment using the Render API
-            curl --request DELETE \
-              --url "https://api.render.com/v1/environments/$ENVIRONMENT_ID" \
-              --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}"
+          echo "Destroying service for PR ${{ github.event.pull_request.number }}"
+          if [ -f service-id.txt ]; then
+            SERVICE_ID=$(cat service-id.txt)
+            echo "Using Service ID: $SERVICE_ID"
+            # Delete the service using the Render API
+            curl -v --request DELETE \
+              --url "https://api.render.com/v1/services/$SERVICE_ID" \
+              --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" 2>&1
+            echo "Service deletion request completed"
           else
-            echo "Environment ID artifact not found, skipping deletion"
+            echo "Service ID artifact not found, skipping deletion"
           fi
           

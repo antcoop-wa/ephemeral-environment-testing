@@ -1,4 +1,4 @@
-name: Create Render Preview Environment
+name: Create Render Preview Service
 
 on:
   pull_request:
@@ -8,92 +8,71 @@ jobs:
   deploy-preview:
     runs-on: ubuntu-latest
     steps:
+      - name: Verify jq is installed
+        run: jq --version
+        
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Create Environment
+      - name: Create Static Site Service
         run: |
-          echo "Creating ephemeral environment for PR ${{ github.event.pull_request.number }}"
-          ENV_NAME="wa-test-pr-${{ github.event.pull_request.number }}-env"
+          echo "Creating static site service for PR ${{ github.event.pull_request.number }}"
+          SERVICE_NAME="wa-test-pr-${{ github.event.pull_request.number }}-static"
+          ENVIRONMENT_ID="${{ secrets.RENDER_ENV_ID }}"
           
-          # First, check if environment with this name already exists
-          echo "Checking if environment '$ENV_NAME' already exists..."
+          echo "Using Environment ID: $ENVIRONMENT_ID"
+          
+          # First, check if service with this name already exists
+          echo "Checking if service '$SERVICE_NAME' already exists..."
           LIST_RESPONSE=$(curl -s --request GET \
-            --url "https://api.render.com/v1/projects/${{ secrets.RENDER_PROJECT_ID }}/environments" \
+            --url "https://api.render.com/v1/environments/$ENVIRONMENT_ID/services" \
             --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}")
           
-          echo "Environments list response:"
+          echo "Services list response:"
           echo "$LIST_RESPONSE"
           
-          ENVIRONMENT_ID=$(echo "$LIST_RESPONSE" | jq -r ".environments[] | select(.name == \"$ENV_NAME\") | .id" 2>/dev/null | head -1)
+          SERVICE_ID=$(echo "$LIST_RESPONSE" | jq -r ".services[] | select(.name == \"$SERVICE_NAME\") | .id" 2>/dev/null | head -1)
           
-          if [ -n "$ENVIRONMENT_ID" ] && [ "$ENVIRONMENT_ID" != "null" ]; then
-            echo "Environment '$ENV_NAME' already exists with ID: $ENVIRONMENT_ID"
+          if [ -n "$SERVICE_ID" ] && [ "$SERVICE_ID" != "null" ]; then
+            echo "Service '$SERVICE_NAME' already exists with ID: $SERVICE_ID"
           else
-            echo "Environment '$ENV_NAME' does not exist, creating new one..."
-            ENV_RESPONSE=$(curl -v --request POST \
-              --url "https://api.render.com/v1/environments" \
+            echo "Service '$SERVICE_NAME' does not exist, creating new one..."
+            SERVICE_RESPONSE=$(curl -v --request POST \
+              --url "https://api.render.com/v1/environments/$ENVIRONMENT_ID/services" \
               --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
               --header "Content-Type: application/json" \
               --data '{
-                "name": "'$ENV_NAME'",
-                "description": "Ephemeral environment for PR #${{ github.event.pull_request.number }}",
-                "projectId": "${{ secrets.RENDER_PROJECT_ID }}"
+                "type": "static_site",
+                "name": "'$SERVICE_NAME'",
+                "repo": "${{ github.event.pull_request.head.repo.clone_url }}",
+                "branch": "${{ github.head_ref }}",
+                "publishDirectory": "./dist",
+                "autoDeploy": false
               }' 2>&1)
             
-            echo "Environment Response:"
-            echo "$ENV_RESPONSE"
-            ENVIRONMENT_ID=$(echo "$ENV_RESPONSE" | jq -r '.id' 2>/dev/null)
-            echo "Extracted Environment ID: $ENVIRONMENT_ID"
+            echo "Service Response:"
+            echo "$SERVICE_RESPONSE"
+            SERVICE_ID=$(echo "$SERVICE_RESPONSE" | jq -r '.id' 2>/dev/null)
+            echo "Extracted Service ID: $SERVICE_ID"
           fi
           
-          if [ -z "$ENVIRONMENT_ID" ] || [ "$ENVIRONMENT_ID" = "null" ]; then
-            echo "ERROR: Failed to get environment ID"
-            exit 1
-          fi
-          
-          echo "$ENVIRONMENT_ID" > environment-id.txt
-          echo "ENVIRONMENT_ID=$ENVIRONMENT_ID" >> $GITHUB_OUTPUT
-
-      - name: Create Static Site Service in Environment
-        run: |
-          echo "Creating static site service in environment for PR ${{ github.event.pull_request.number }}"
-          ENVIRONMENT_ID=$(cat environment-id.txt)
-          echo "Using Environment ID: $ENVIRONMENT_ID"
-          SERVICE_RESPONSE=$(curl -v --request POST \
-            --url "https://api.render.com/v1/environments/$ENVIRONMENT_ID/services" \
-            --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
-            --header "Content-Type: application/json" \
-            --data '{
-              "type": "static_site",
-              "name": "wa-test-pr-${{ github.event.pull_request.number }}-static",
-              "repo": "${{ github.event.pull_request.head.repo.clone_url }}",
-              "branch": "${{ github.head_ref }}",
-              "publishDirectory": "./dist",
-              "autoDeploy": false
-            }' 2>&1)
-          echo "Service Response:"
-          echo "$SERVICE_RESPONSE"
-          SERVICE_ID=$(echo "$SERVICE_RESPONSE" | jq -r '.id' 2>/dev/null)
-          echo "Extracted Service ID: $SERVICE_ID"
           if [ -z "$SERVICE_ID" ] || [ "$SERVICE_ID" = "null" ]; then
-            echo "ERROR: Failed to extract service ID"
+            echo "ERROR: Failed to get service ID"
             exit 1
           fi
+          
           echo "$SERVICE_ID" > service-id.txt
           echo "SERVICE_ID=$SERVICE_ID" >> $GITHUB_OUTPUT
-
-      - name: Upload environment ID artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: environment-id
-          path: environment-id.txt
 
       - name: Upload service ID artifact
         uses: actions/upload-artifact@v4
         with:
           name: service-id
           path: service-id.txt
+          
+      - name: Post URL to PR comment (placeholder)
+        # Add a step to comment the preview URL back to the GitHub Pull Request
+        run: echo "Preview service is available at some-url-for-pr-${{ github.event.pull_request.number }}"
           
       - name: Post URL to PR comment (placeholder)
         # Add a step to comment the preview URL back to the GitHub Pull Request
