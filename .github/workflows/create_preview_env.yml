@@ -85,7 +85,7 @@ jobs:
             echo "Service create HTTP status: $SERVICE_STATUS"
             echo "Service create body: $SERVICE_BODY"
 
-            SERVICE_ID=$(echo "$SERVICE_BODY" | jq -r '.id' 2>/dev/null)
+            SERVICE_ID=$(echo "$SERVICE_BODY" | jq -r '.service.id' 2>/dev/null)
             echo "Extracted Service ID: $SERVICE_ID"
           fi
           
