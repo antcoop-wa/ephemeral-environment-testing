@@ -27,7 +27,7 @@ jobs:
           LIST_RESPONSE=$(curl -s --request GET \
             --url "https://api.render.com/v1/services" \
             --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}") \
-            --header 'Accept: application/json'
+            --header "Accept: application/json"
           
           echo "Services list response:"
           echo "$LIST_RESPONSE"
@@ -41,7 +41,7 @@ jobs:
             SERVICE_RESPONSE=$(curl -v --request POST \
               --url "https://api.render.com/v1/services" \
               --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
-              --header 'Accept: application/json' \
+              --header "Accept: application/json" \
               --header "Content-Type: application/json" \
               --data '{
                 "type": "static_site",
