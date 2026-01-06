@@ -26,5 +26,5 @@ jobs:
           DEPLOY_ID=$(cat deploy-id.txt)
           echo "Using Deploy ID: $DEPLOY_ID"
           # Cancel the deployment using the Render API
-          curl --request POST --url "api.render.com/$DEPLOY_ID/cancel" --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}"
+          curl --request POST --url "https://api.render.com/services/${{ secrets.RENDER_SERVICE_ID }}/$DEPLOY_ID/cancel" --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}"
           

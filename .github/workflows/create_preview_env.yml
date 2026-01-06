@@ -19,7 +19,7 @@ jobs:
         run: |
           echo "Triggering deployment for PR ${{ github.event.pull_request.number }}"
           # Example using a placeholder script with secrets (requires a custom script to manage service creation/deletion)
-          DEPLOY_RESPONSE=$(curl --request POST --url "api.render.com${{ secrets.RENDER_SERVICE_ID }}/deploys" --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}")
+          DEPLOY_RESPONSE=$(curl --request POST --url "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}")
           DEPLOY_ID=$(echo "$DEPLOY_RESPONSE" | jq -r '.id')
           echo "Deploy ID: $DEPLOY_ID"
           echo "$DEPLOY_ID" > deploy-id.txt
