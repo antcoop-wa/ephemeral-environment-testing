@@ -1,0 +1,30 @@
+name: Create Render Preview Environment
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Render
+        # You'll likely need a custom script or a third-party action to create an entirely new *ephemeral* service on Render.
+        # For simplicity with the standard Render setup, you might trigger a 'deploy hook' on a specific *preview* service, 
+        # but true ephemeral environments require more advanced tools like those mentioned in the intro.
+        # A simple deployment trigger for a pre-existing "preview" service would look like this (less truly ephemeral):
+        run: |
+          # This is a placeholder for triggering a specific deploy/environment creation logic
+          # A typical approach involves using the Render API to manage services dynamically
+          echo "Triggering deployment for PR ${{ github.event.pull_request.number }}"
+          # Example using a placeholder script with secrets (requires a custom script to manage service creation/deletion)
+          # curl --request POST --url "api.render.com{{ secrets.RENDER_SERVICE_ID }}/deploys" --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}"
+          
+          # More complex, robust solutions use Infrastructure as Code tools (Terraform/Helm) or platforms like Uffizzi/Humanitec
+          
+      - name: Post URL to PR comment (placeholder)
+        # Add a step to comment the preview URL back to the GitHub Pull Request
+        run: echo "Preview environment is available at some-url-for-pr-${{ github.event.pull_request.number }}"

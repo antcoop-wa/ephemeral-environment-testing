@@ -1,0 +1,18 @@
+name: Destroy Render Preview Environment
+
+on:
+  pull_request:
+    types: [closed, merged]
+
+jobs:
+  destroy-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Destroy Environment
+        # This step needs logic to delete the specific service instance or namespace created for the PR.
+        # As with the creation step, this is complex with basic Render setup.
+        # A custom script would interact with the Render API to delete the service by ID.
+        run: |
+          echo "Destroying environment for PR ${{ github.event.pull_request.number }}"
+          # Example: A custom script 'delete-render-service.sh' would be called here
+          # ./delete-render-service.sh ${{ secrets.RENDER_API_KEY }} ${{ github.event.pull_request.number }}
