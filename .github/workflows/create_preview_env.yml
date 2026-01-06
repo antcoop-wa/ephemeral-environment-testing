@@ -69,10 +69,16 @@ jobs:
               --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
               --header "Accept: application/json" \
               --header "Content-Type: application/json" \
-              --data '{
-                "branch": "${{ github.head_ref }}",
-                "autoDeploy": "yes"
-              }' -w "::HTTP_STATUS::%{http_code}")
+             --data '{
+              "repo": "${{ github.event.pull_request.head.repo.clone_url }}",
+              "branch": "${{ github.head_ref }}",
+              "environmentId": "'$ENVIRONMENT_ID'",
+              "ownerId": "${{ secrets.RENDER_OWNER_ID }}",
+              "serviceDetails": {
+                "buildCommand": "npm install; npm run build",
+                "publishPath": "./dist"
+              }
+            }' -w "::HTTP_STATUS::%{http_code}")
 
             SERVICE_STATUS=$(echo "$SERVICE_RAW" | awk -F"::HTTP_STATUS::" '{print $2}')
             SERVICE_BODY=$(echo "$SERVICE_RAW" | sed -e 's/::HTTP_STATUS::.*$//')
