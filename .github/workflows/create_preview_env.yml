@@ -17,13 +17,18 @@ jobs:
         # but true ephemeral environments require more advanced tools like those mentioned in the intro.
         # A simple deployment trigger for a pre-existing "preview" service would look like this (less truly ephemeral):
         run: |
-          # This is a placeholder for triggering a specific deploy/environment creation logic
-          # A typical approach involves using the Render API to manage services dynamically
           echo "Triggering deployment for PR ${{ github.event.pull_request.number }}"
           # Example using a placeholder script with secrets (requires a custom script to manage service creation/deletion)
-          # curl --request POST --url "api.render.com{{ secrets.RENDER_SERVICE_ID }}/deploys" --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}"
-          
-          # More complex, robust solutions use Infrastructure as Code tools (Terraform/Helm) or platforms like Uffizzi/Humanitec
+          DEPLOY_RESPONSE=$(curl --request POST --url "api.render.com{{ secrets.RENDER_SERVICE_ID }}/deploys" --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}")
+          DEPLOY_ID=$(echo "$DEPLOY_RESPONSE" | jq -r '.id')
+          echo "Deploy ID: $DEPLOY_ID"
+          echo "$DEPLOY_ID" > deploy-id.txt
+
+      - name: Upload deploy ID artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-id
+          path: deploy-id.txt
           
       - name: Post URL to PR comment (placeholder)
         # Add a step to comment the preview URL back to the GitHub Pull Request
