@@ -26,23 +26,25 @@ jobs:
           echo "Environment ID: $ENVIRONMENT_ID"
           echo "$ENVIRONMENT_ID" > environment-id.txt
 
-      - name: Deploy Static Site to Environment
+      - name: Create Static Site Service in Environment
         run: |
-          echo "Deploying static site to environment for PR ${{ github.event.pull_request.number }}"
+          echo "Creating static site service in environment for PR ${{ github.event.pull_request.number }}"
           ENVIRONMENT_ID=$(cat environment-id.txt)
-          DEPLOY_RESPONSE=$(curl --request POST \
-            --url "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
+          SERVICE_RESPONSE=$(curl --request POST \
+            --url "https://api.render.com/v1/environments/$ENVIRONMENT_ID/services" \
             --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             --header "Content-Type: application/json" \
             --data '{
-              "environmentId": "'$ENVIRONMENT_ID'",
+              "type": "static_site",
+              "name": "wa-test-pr-${{ github.event.pull_request.number }}-static",
+              "repo": "${{ github.event.pull_request.head.repo.clone_url }}",
               "branch": "${{ github.head_ref }}",
               "publishDirectory": "./dist",
-              "autoDeploy": "off"
+              "autoDeploy": false
             }')
-          DEPLOY_ID=$(echo "$DEPLOY_RESPONSE" | jq -r '.id')
-          echo "Deploy ID: $DEPLOY_ID"
-          echo "$DEPLOY_ID" > deploy-id.txt
+          SERVICE_ID=$(echo "$SERVICE_RESPONSE" | jq -r '.id')
+          echo "Service ID: $SERVICE_ID"
+          echo "$SERVICE_ID" > service-id.txt
 
       - name: Upload environment ID artifact
         uses: actions/upload-artifact@v4
@@ -50,11 +52,11 @@ jobs:
           name: environment-id
           path: environment-id.txt
 
-      - name: Upload deploy ID artifact
+      - name: Upload service ID artifact
         uses: actions/upload-artifact@v4
         with:
-          name: deploy-id
-          path: deploy-id.txt
+          name: service-id
+          path: service-id.txt
           
       - name: Post URL to PR comment (placeholder)
         # Add a step to comment the preview URL back to the GitHub Pull Request
