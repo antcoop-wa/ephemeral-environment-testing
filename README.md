@@ -19,57 +19,37 @@ If you are developing a production application, we recommend updating the config
 
 ```js
 export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+  # Ephemeral Preview Workflows (GitHub Actions)
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+  This repository contains GitHub Actions that create and destroy ephemeral preview static-site services on Render for pull requests.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+  **Purpose**
+  - Automate spin-up of a preview static site per PR and teardown when the PR closes.
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+  **Primary workflow files**
+  - `./.github/workflows/create_preview_env.yml`: creates or updates a Render static-site service for the PR, captures `service-id` and `service-url`, and uploads them as artifacts.
+  - `./.github/workflows/destory_preview_env.yml`: (destroy) downloads the artifact or queries Render by service name to delete the preview service when the PR is closed.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+  **Highlights**
+  - **Create-or-update**: detects existing service by name and `PATCH`es it, otherwise `POST` to create a new service.
+  - **Artifacts**: uploads `service-id.txt` and `service-url.txt` so downstream jobs can consume them.
+  - **Robust API handling**: curl responses include HTTP status + body capture, `--noproxy` and retry handling, and jq is used for JSON parsing.
+  - **Fallbacks**: destroy job will query Render for a service matching the PR naming convention when artifacts are not available.
+  - **PR communication**: workflows attempt to publish the preview URL to the PR (with cleanup of previous bot comments); fallbacks exist for permission-limited contexts (e.g., forked PRs) such as job summaries and logs.
 
+  **Required secrets / repo vars**
+  - `RENDER_API_KEY` — Render API key used to call the Render REST API.
+  - `RENDER_ENV_ID` or `RENDER_PROJECT_ID` / `RENDER_OWNER_ID` — depending on whether environments are created or an environment ID is provided.
+  - `GITHUB_TOKEN` — used for PR comments; note: `GITHUB_TOKEN` has limitations for forked PRs so some comment actions may fall back to job summaries.
+
+  **Service naming / defaults**
+  - Default publish directory: `./dist` (adjustable in the workflow if your build outputs elsewhere).
+  - Service name pattern used in the workflows: `wa-test-pr-${{ github.event.pull_request.number }}-static`.
+
+  **Notes**
+  - Artifacts are convenient but not guaranteed across all workflow runs; the workflows include API fallbacks to locate and remove preview services.
+  - If you want me to commit these workflows, run them, or further DRY/refactor the scripts (extract curl helpers), tell me which approach you prefer.
+
+  --
+  Workflow-focused README added by automation helper.
 export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
