@@ -86,8 +86,8 @@ jobs:
             echo "Service update HTTP status: $SERVICE_STATUS"
             echo "Service update body: $SERVICE_BODY"
 
-            SERVICE_ID=$(echo "$SERVICE_BODY" | jq -r '.service.id' 2>/dev/null)
-            SERVICE_URL=$(echo "$SERVICE_BODY" | jq -r '.service.serviceDetails.url' 2>/dev/null)
+            SERVICE_ID=$(echo "$SERVICE_BODY" | jq -r '.id' 2>/dev/null)
+            SERVICE_URL=$(echo "$SERVICE_BODY" | jq -r '.serviceDetails.url' 2>/dev/null)
             echo "Updated Service ID: $SERVICE_ID"
             echo "Updated Service URL: $SERVICE_URL"
           else
