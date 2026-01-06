@@ -1,30 +1,32 @@
 name: Destroy Render Preview Environment
 
 on:
-  workflow_run:
-    workflows: ["Create Render Preview Environment"]
-    types: [completed]
   pull_request:
-    types: [closed, merged]
+    types: [closed]
 
 jobs:
   destroy-preview:
     runs-on: ubuntu-latest
     steps:
-      - name: Download deploy ID artifact
+      - name: Download environment ID artifact
         uses: actions/download-artifact@v4
         with:
-          name: deploy-id
+          name: environment-id
           path: ./
+        continue-on-error: true
 
       - name: Destroy Environment
-        # This step needs logic to delete the specific service instance or namespace created for the PR.
-        # As with the creation step, this is complex with basic Render setup.
-        # A custom script would interact with the Render API to delete the service by ID.
+        # This step deletes the ephemeral environment created for the PR
         run: |
           echo "Destroying environment for PR ${{ github.event.pull_request.number }}"
-          DEPLOY_ID=$(cat deploy-id.txt)
-          echo "Using Deploy ID: $DEPLOY_ID"
-          # Cancel the deployment using the Render API
-          curl --request POST --url "https://api.render.com/services/${{ secrets.RENDER_SERVICE_ID }}/$DEPLOY_ID/cancel" --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}"
+          if [ -f environment-id.txt ]; then
+            ENVIRONMENT_ID=$(cat environment-id.txt)
+            echo "Using Environment ID: $ENVIRONMENT_ID"
+            # Delete the environment using the Render API
+            curl --request DELETE \
+              --url "https://api.render.com/v1/environments/$ENVIRONMENT_ID" \
+              --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}"
+          else
+            echo "Environment ID artifact not found, skipping deletion"
+          fi
           

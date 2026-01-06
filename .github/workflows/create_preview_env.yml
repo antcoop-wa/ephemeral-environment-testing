@@ -11,18 +11,41 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy to Render
-        # You'll likely need a custom script or a third-party action to create an entirely new *ephemeral* service on Render.
-        # For simplicity with the standard Render setup, you might trigger a 'deploy hook' on a specific *preview* service, 
-        # but true ephemeral environments require more advanced tools like those mentioned in the intro.
-        # A simple deployment trigger for a pre-existing "preview" service would look like this (less truly ephemeral):
+      - name: Create Environment
         run: |
-          echo "Triggering deployment for PR ${{ github.event.pull_request.number }}"
-          # Example using a placeholder script with secrets (requires a custom script to manage service creation/deletion)
-          DEPLOY_RESPONSE=$(curl --request POST --url "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}")
+          echo "Creating ephemeral environment for PR ${{ github.event.pull_request.number }}"
+          ENV_RESPONSE=$(curl --request POST \
+            --url "https://api.render.com/v1/projects/${{ secrets.RENDER_PROJECT_ID }}/environments" \
+            --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            --header "Content-Type: application/json" \
+            --data '{
+              "name": "pr-${{ github.event.pull_request.number }}-env",
+              "description": "Ephemeral environment for PR #${{ github.event.pull_request.number }}"
+            }')
+          ENVIRONMENT_ID=$(echo "$ENV_RESPONSE" | jq -r '.id')
+          echo "Environment ID: $ENVIRONMENT_ID"
+          echo "$ENVIRONMENT_ID" > environment-id.txt
+
+      - name: Deploy Service to Environment
+        run: |
+          echo "Deploying service to environment for PR ${{ github.event.pull_request.number }}"
+          ENVIRONMENT_ID=$(cat environment-id.txt)
+          DEPLOY_RESPONSE=$(curl --request POST \
+            --url "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
+            --header "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            --header "Content-Type: application/json" \
+            --data '{
+              "environmentId": "'$ENVIRONMENT_ID'"
+            }')
           DEPLOY_ID=$(echo "$DEPLOY_RESPONSE" | jq -r '.id')
           echo "Deploy ID: $DEPLOY_ID"
           echo "$DEPLOY_ID" > deploy-id.txt
+
+      - name: Upload environment ID artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-id
+          path: environment-id.txt
 
       - name: Upload deploy ID artifact
         uses: actions/upload-artifact@v4
